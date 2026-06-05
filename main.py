@@ -30,6 +30,36 @@ db_url = URL.create(
 )
 engine = create_engine(db_url)
 
+
+def ensure_user_reports_table():
+    """Create the user report table required by /api/reports if it is missing."""
+    ddl = text("""
+        CREATE TABLE IF NOT EXISTS user_reports (
+            id SERIAL PRIMARY KEY,
+            geom geometry(Point, 4326) NOT NULL,
+            categories TEXT[] NOT NULL,
+            intensity INTEGER NOT NULL DEFAULT 0 CHECK (intensity BETWEEN 0 AND 8),
+            memo TEXT,
+            etc_text TEXT,
+            status TEXT NOT NULL DEFAULT 'visible' CHECK (status IN ('visible', 'hidden')),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_reports_geom
+            ON user_reports USING GIST (geom);
+
+        CREATE INDEX IF NOT EXISTS idx_user_reports_status_created_at
+            ON user_reports (status, created_at DESC);
+    """)
+    with engine.begin() as conn:
+        conn.execute(ddl)
+
+
+@app.on_event("startup")
+def on_startup():
+    ensure_user_reports_table()
+
+
 class RouteRequest(BaseModel):
     start_lat: float
     start_lng: float
